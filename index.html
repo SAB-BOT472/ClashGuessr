@@ -1,1 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ClashGuessr — Full (Local Accounts + Export/Import)</title>
+<style>
+:root{--gold:#ffd34a;--good:#1abc9c;--bad:#e74c3c}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Arial;background:url("background.jpg") center/cover no-repeat fixed;color:#fff}
+.bg-blur{position:fixed;inset:0;background:rgba(0,0,0,0.45);backdrop-filter:blur(6px);z-index:0}
+.container{position:relative;z-index:2;max-width:1100px;margin:28px auto;padding:20px}
+.panel{background:rgba(20,20,20,0.55);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.06);backdrop-filter:blur(8px)}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.title{font-size:28px;font-weight:800;color:var(--gold);text-shadow:0 2px 10px rgba(0,0,0,.6)}
+.modes{display:flex;gap:10px}
+.btn{background:transparent;border:2px solid rgba(255,255,255,0.08);color:#fff;padding:10px 16px;border-radius:12px;cursor:pointer;font-weight:800}
+.btn.active{background:var(--gold);color:#111}
+.input-row{display:flex;gap:12px;align-items:center;margin-bottom:10px;position:relative}
+#guessInput{flex:1;padding:14px;border-radius:12px;border:none;font-size:16px;background:rgba(255,255,255,0.06);color:#fff}
+.suggestions-list{position:absolute;left:0;right:0;top:58px;background:#111;border-radius:12px;max-height:260px;overflow:auto;z-index:50;border:1px solid rgba(255,255,255,0.06);display:none}
+.suggest-item{display:flex;gap:10px;padding:10px;align-items:center;cursor:pointer}
+.suggest-thumb{width:52px;height:64px;object-fit:cover;border-radius:8px;border:2px solid rgba(255,255,255,0.04)}
+.canvas-wrap{display:flex;justify-content:center;margin:12px 0}
+#pixelCanvas{background:#000;border-radius:12px;border:1px solid rgba(255,255,255,0.06);max-width:100%}
+.results{margin-top:18px}
+.guess-row{display:grid;grid-template-columns:120px repeat(5,1fr);gap:10px;padding:12px;border-radius:14px;background:rgba(255,255,255,0.03);align-items:center;margin-bottom:10px}
+.tile{text-align:center;padding:10px;border-radius:10px;font-weight:800}
+.correct{background:var(--good);color:#012}
+.wrong{background:var(--bad);color:#fff}
+.up{background:#f39c12;color:#111}
+.down{background:#c0392b;color:#fff}
+.card-thumb{width:80px;height:80px;object-fit:cover;border-radius:10px;border:3px solid rgba(255,255,255,0.04)}
+#endless-score{position:fixed;top:18px;right:18px;background:rgba(0,0,0,0.55);padding:12px 16px;border-radius:12px;font-weight:800;z-index:99}
+.auth-row{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-bottom:12px}
+.lb-row{display:flex;justify-content:space-between;padding:8px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.win-banner{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);padding:14px 20px;border-radius:12px;z-index:9999}
+.footer{font-size:13px;color:#ccc;margin-top:14px;text-align:center}
+.mode-area{display:flex;align-items:center}
+.mode-label{font-weight:700;margin-right:6px;opacity:0.9}
+.small-btn{padding:6px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#fff;cursor:pointer}
+.small-btn.active{background:rgba(255,255,255,0.08)}
+/* Login panel */
+#loginPanel{position:fixed;top:18px;left:18px;background:rgba(0,0,0,0.6);padding:12px;border-radius:12px;z-index:99;border:1px solid rgba(255,255,255,0.06)}
+#loginPanel input{display:block;margin:6px 0;padding:8px;border-radius:8px;border:none;background:rgba(255,255,255,0.04);color:#fff}
+#loginPanel button{margin-top:6px;padding:8px 10px;border-radius:8px;border:none;background:var(--gold);color:#111;cursor:pointer}
+#importFile{display:none}
+</style>
+</head>
+<body>
+<div class="bg-blur"></div>
+
+<div class="container panel">
+
+  <div class="header">
+    <div>
+      <div class="title">ClashGuessr — Full (Local Accounts + Export/Import)</div>
+      <div style="margin-top:6px;font-size:13px;color:#ddd">Local accounts with export/import. "Remember me" available.</div>
+    </div>
+
+    <div class="mode-area">
+      <div class="mode-label">Mode</div>
+      <div class="modes">
+        <button class="btn active" id="modeClassicBtn">Classic</button>
+        <button class="btn" id="modePixelBtn">Pixel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-row">
+    <div id="user-info" style="margin-right:auto">Not signed in</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn" id="exportBtn">Export Scores</button>
+      <button class="btn" id="importBtn">Import Scores</button>
+      <input type="file" id="importFile" accept="application/json">
+    </div>
+  </div>
+
+  <!-- Classic submode -->
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+    <div class="mode-label">Classic</div>
+    <div class="modes">
+      <button class="btn" id="btnDaily">Daily</button>
+      <button class="btn active" id="btnEndless">Endless</button>
+    </div>
+
+    <!-- Pixel submode controls shown only when Pixel Mode active -->
+    <div id="pixelControls" style="display:none;margin-left:18px;align-items:center">
+      <div class="mode-label">Pixel</div>
+      <div class="submodes">
+        <button class="small-btn" id="pixelDailyBtn">Pixel Daily</button>
+        <button class="small-btn active" id="pixelEndlessBtn">Pixel Endless</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-row">
+    <input id="guessInput" placeholder="Start typing a card..." autocomplete="off">
+    <div id="suggestionsList" class="suggestions-list"></div>
+  </div>
+
+  <!-- Pixel canvas placed between guess box and results -->
+  <div class="canvas-wrap" id="canvasWrap" style="display:none">
+    <canvas id="pixelCanvas" width="360" height="252"></canvas>
+  </div>
+
+  <div id="results" class="results"></div>
+
+  <div id="leaderboard" class="panel" style="margin-top:18px">
+    <h3 style="margin:6px 0">Leaderboard (local)</h3>
+    <div id="lbList"></div>
+  </div>
+
+  <div class="footer">Drop background.jpg next to this file. Use Export/Import to share scores.</div>
+</div>
+
+<div id="endless-score">Score: 0</div>
+
+<!-- Local account/login panel -->
+<div id="loginPanel">
+  <div style="font-weight:800;margin-bottom:6px">Account</div>
+  <input id="acctUser" placeholder="Username">
+  <input id="acctPass" type="password" placeholder="Password">
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input type="checkbox" id="rememberMe"> Remember me</label>
+  <div style="display:flex;gap:8px;">
+    <button id="loginBtn">Log In</button>
+    <button id="signupBtn">Sign Up</button>
+    <button id="logoutBtn" style="display:none;background:#444;color:#fff;border-radius:8px;padding:8px">Log Out</button>
+  </div>
+  <div id="acctMsg" style="margin-top:6px;font-size:13px;opacity:0.9"></div>
+</div>
+
+<script>
+/* ------------------------------------------------------------------
+   Full single-file app with local accounts + export/import leaderboard
+   ------------------------------------------------------------------*/
+
+// ---------- CARDS (same list) ----------
+const CARDS = [
+  {"name":"Archers","elixir":3,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/archers.png"},
+  {"name":"Archer Queen","elixir":5,"rarity":"Champion","type":"Troop","targets":"Air & Ground","year":2021,"image":"https://cdn.royaleapi.com/static/img/cards/archer-queen.png"},
+  {"name":"Arrows","elixir":3,"rarity":"Common","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/arrows.png"},
+  {"name":"Baby Dragon","elixir":4,"rarity":"Epic","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/baby-dragon.png"},
+  {"name":"Bandit","elixir":3,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/bandit.png"},
+  {"name":"Barbarian Barrel","elixir":2,"rarity":"Epic","type":"Spell","targets":"Ground","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/barbarian-barrel.png"},
+  {"name":"Barbarians","elixir":5,"rarity":"Common","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/barbarians.png"},
+  {"name":"Battle Healer","elixir":4,"rarity":"Rare","type":"Troop","targets":"Ground","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/battle-healer.png"},
+  {"name":"Battle Machine","elixir":4,"rarity":"Champion","type":"Troop","targets":"Ground","year":2024,"image":"https://cdn.royaleapi.com/static/img/cards/battle-machine.png"},
+  {"name":"Battle Ram","elixir":4,"rarity":"Rare","type":"Troop","targets":"Buildings","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/battle-ram.png"},
+  {"name":"Bomb Tower","elixir":4,"rarity":"Rare","type":"Building","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/bomb-tower.png"},
+  {"name":"Bomber","elixir":2,"rarity":"Common","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/bomber.png"},
+  {"name":"Bowler","elixir":5,"rarity":"Epic","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/bowler.png"},
+  {"name":"Cannon","elixir":3,"rarity":"Common","type":"Building","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/cannon.png"},
+  {"name":"Cannon Cart","elixir":5,"rarity":"Epic","type":"Troop","targets":"Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/cannon-cart.png"},
+  {"name":"Dark Prince","elixir":4,"rarity":"Epic","type":"Troop","targets":"Ground","year":2015,"image":"https://cdn.royaleapi.com/static/img/cards/dark-prince.png"},
+  {"name":"Dart Goblin","elixir":3,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/dart-goblin.png"},
+  {"name":"Earthquake","elixir":3,"rarity":"Rare","type":"Spell","targets":"Ground","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/earthquake.png"},
+  {"name":"Electro Dragon","elixir":5,"rarity":"Epic","type":"Troop","targets":"Air & Ground","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/electro-dragon.png"},
+  {"name":"Electro Giant","elixir":7,"rarity":"Epic","type":"Troop","targets":"Buildings","year":2020,"image":"https://cdn.royaleapi.com/static/img/cards/electro-giant.png"},
+  {"name":"Electro Spirit","elixir":1,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2020,"image":"https://cdn.royaleapi.com/static/img/cards/electro-spirit.png"},
+  {"name":"Electro Wizard","elixir":4,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/electro-wizard.png"},
+  {"name":"Elixir Collector","elixir":6,"rarity":"Rare","type":"Building","targets":"None","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/elixir-collector.png"},
+  {"name":"Elixir Golem","elixir":2,"rarity":"Rare","type":"Troop","targets":"Buildings","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/elixir-golem.png"},
+  {"name":"Executioner","elixir":5,"rarity":"Epic","type":"Troop","targets":"Air & Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/executioner.png"},
+  {"name":"Firecracker","elixir":3,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/firecracker.png"},
+  {"name":"Fire Spirit","elixir":1,"rarity":"Common","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/fire-spirit.png"},
+  {"name":"Fireball","elixir":4,"rarity":"Rare","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/fireball.png"},
+  {"name":"Fisherman","elixir":3,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/fisherman.png"},
+  {"name":"Flying Machine","elixir":4,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/flying-machine.png"},
+  {"name":"Freeze","elixir":4,"rarity":"Epic","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/freeze.png"},
+  {"name":"Giant","elixir":5,"rarity":"Rare","type":"Troop","targets":"Buildings","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/giant.png"},
+  {"name":"Giant Skeleton","elixir":6,"rarity":"Epic","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/giant-skeleton.png"},
+  {"name":"Giant Snowball","elixir":2,"rarity":"Common","type":"Spell","targets":"Air & Ground","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/giant-snowball.png"},
+  {"name":"Goblin Barrel","elixir":3,"rarity":"Epic","type":"Spell","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/goblin-barrel.png"},
+  {"name":"Goblin Cage","elixir":4,"rarity":"Rare","type":"Building","targets":"Ground","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/goblin-cage.png"},
+  {"name":"Goblin Drill","elixir":4,"rarity":"Epic","type":"Building","targets":"Ground","year":2021,"image":"https://cdn.royaleapi.com/static/img/cards/goblin-drill.png"},
+  {"name":"Goblin Gang","elixir":3,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/goblin-gang.png"},
+  {"name":"Goblin Giant","elixir":6,"rarity":"Epic","type":"Troop","targets":"Buildings","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/goblin-giant.png"},
+  {"name":"Golden Knight","elixir":4,"rarity":"Champion","type":"Troop","targets":"Ground","year":2021,"image":"https://cdn.royaleapi.com/static/img/cards/golden-knight.png"},
+  {"name":"Golem","elixir":8,"rarity":"Epic","type":"Troop","targets":"Buildings","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/golem.png"},
+  {"name":"Graveyard","elixir":5,"rarity":"Legendary","type":"Spell","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/graveyard.png"},
+  {"name":"Guards","elixir":3,"rarity":"Epic","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/guards.png"},
+  {"name":"Heal Spirit","elixir":1,"rarity":"Rare","type":"Troop","targets":"None","year":2020,"image":"https://cdn.royaleapi.com/static/img/cards/heal-spirit.png"},
+  {"name":"Hog Rider","elixir":4,"rarity":"Rare","type":"Troop","targets":"Buildings","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/hog-rider.png"},
+  {"name":"Hunter","elixir":4,"rarity":"Epic","type":"Troop","targets":"Air & Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/hunter.png"},
+  {"name":"Ice Golem","elixir":2,"rarity":"Rare","type":"Troop","targets":"Buildings","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/ice-golem.png"},
+  {"name":"Ice Spirit","elixir":1,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/ice-spirit.png"},
+  {"name":"Ice Wizard","elixir":3,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/ice-wizard.png"},
+  {"name":"Inferno Dragon","elixir":4,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/inferno-dragon.png"},
+  {"name":"Inferno Tower","elixir":5,"rarity":"Rare","type":"Building","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/inferno-tower.png"},
+  {"name":"Knight","elixir":3,"rarity":"Common","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/knight.png"},
+  {"name":"Lava Hound","elixir":7,"rarity":"Legendary","type":"Troop","targets":"Buildings","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/lava-hound.png"},
+  {"name":"Lightning","elixir":6,"rarity":"Epic","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/lightning.png"},
+  {"name":"Magic Archer","elixir":4,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/magic-archer.png"},
+  {"name":"Mega Knight","elixir":7,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/mega-knight.png"},
+  {"name":"Mega Minion","elixir":3,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/mega-minion.png"},
+  {"name":"Miner","elixir":3,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/miner.png"},
+  {"name":"Mini P.E.K.K.A","elixir":4,"rarity":"Rare","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/mini-pekka.png"},
+  {"name":"Minions","elixir":3,"rarity":"Common","type":"Troop","targets":"Air","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/minions.png"},
+  {"name":"Minion Horde","elixir":5,"rarity":"Common","type":"Troop","targets":"Air","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/minion-horde.png"},
+  {"name":"Mirror","elixir":1,"rarity":"Epic","type":"Spell","targets":"None","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/mirror.png"},
+  {"name":"Monk","elixir":5,"rarity":"Champion","type":"Troop","targets":"Ground","year":2022,"image":"https://cdn.royaleapi.com/static/img/cards/monk.png"},
+  {"name":"Mortar","elixir":4,"rarity":"Common","type":"Building","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/mortar.png"},
+  {"name":"Mother Witch","elixir":4,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2020,"image":"https://cdn.royaleapi.com/static/img/cards/mother-witch.png"},
+  {"name":"Musketeer","elixir":4,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/musketeer.png"},
+  {"name":"Night Witch","elixir":4,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/night-witch.png"},
+  {"name":"Phoenix","elixir":4,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2022,"image":"https://cdn.royaleapi.com/static/img/cards/phoenix.png"},
+  {"name":"P.E.K.K.A","elixir":7,"rarity":"Epic","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/pekka.png"},
+  {"name":"Poison","elixir":4,"rarity":"Epic","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/poison.png"},
+  {"name":"Prince","elixir":5,"rarity":"Epic","type":"Troop","targets":"Ground","year":2015,"image":"https://cdn.royaleapi.com/static/img/cards/prince.png"},
+  {"name":"Princess","elixir":3,"rarity":"Legendary","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/princess.png"},
+  {"name":"Rage","elixir":2,"rarity":"Epic","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/rage.png"},
+  {"name":"Ram Rider","elixir":5,"rarity":"Legendary","type":"Troop","targets":"Buildings","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/ram-rider.png"},
+  {"name":"Rascals","elixir":5,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/rascals.png"},
+  {"name":"Royal Delivery","elixir":3,"rarity":"Common","type":"Spell","targets":"Air & Ground","year":2020,"image":"https://cdn.royaleapi.com/static/img/cards/royal-delivery.png"},
+  {"name":"Royal Giant","elixir":6,"rarity":"Common","type":"Troop","targets":"Buildings","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/royal-giant.png"},
+  {"name":"Royal Ghost","elixir":3,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/royal-ghost.png"},
+  {"name":"Royal Hogs","elixir":5,"rarity":"Rare","type":"Troop","targets":"Buildings","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/royal-hogs.png"},
+  {"name":"Royal Recruits","elixir":7,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2018,"image":"https://cdn.royaleapi.com/static/img/cards/royal-recruits.png"},
+  {"name":"Skeletons","elixir":1,"rarity":"Common","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/skeletons.png"},
+  {"name":"Skeleton Army","elixir":3,"rarity":"Epic","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/skeleton-army.png"},
+  {"name":"Skeleton Barrel","elixir":3,"rarity":"Common","type":"Troop","targets":"Air","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/skeleton-barrel.png"},
+  {"name":"Skeleton King","elixir":4,"rarity":"Champion","type":"Troop","targets":"Ground","year":2021,"image":"https://cdn.royaleapi.com/static/img/cards/skeleton-king.png"},
+  {"name":"Sparky","elixir":6,"rarity":"Legendary","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/sparky.png"},
+  {"name":"Spear Goblins","elixir":2,"rarity":"Common","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/spear-goblins.png"},
+  {"name":"Tesla","elixir":4,"rarity":"Common","type":"Building","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/tesla.png"},
+  {"name":"The Log","elixir":2,"rarity":"Legendary","type":"Spell","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/the-log.png"},
+  {"name":"Three Musketeers","elixir":9,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/three-musketeers.png"},
+  {"name":"Tombstone","elixir":3,"rarity":"Rare","type":"Building","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/tombstone.png"},
+  {"name":"Tornado","elixir":3,"rarity":"Epic","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/tornado.png"},
+  {"name":"Valkyrie","elixir":4,"rarity":"Rare","type":"Troop","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/valkyrie.png"},
+  {"name":"Wall Breakers","elixir":2,"rarity":"Epic","type":"Troop","targets":"Buildings","year":2019,"image":"https://cdn.royaleapi.com/static/img/cards/wall-breakers.png"},
+  {"name":"Wizard","elixir":5,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/wizard.png"},
+  {"name":"Witch","elixir":5,"rarity":"Epic","type":"Troop","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/witch.png"},
+  {"name":"X-Bow","elixir":6,"rarity":"Epic","type":"Building","targets":"Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/x-bow.png"},
+  {"name":"Zap","elixir":2,"rarity":"Common","type":"Spell","targets":"Air & Ground","year":2016,"image":"https://cdn.royaleapi.com/static/img/cards/zap.png"},
+  {"name":"Zappies","elixir":4,"rarity":"Rare","type":"Troop","targets":"Air & Ground","year":2017,"image":"https://cdn.royaleapi.com/static/img/cards/zappies.png"}
+];
+
+// ---------- LOCAL STORAGE KEYS ----------
+const STORAGE_KEYS = {
+  USERS: 'cg_users_v1',
+  CURRENT: 'cg_current_user_v1'
+};
+
+// ---------- STATE ----------
+let activeMode = 'classic';
+let classicSub = 'endless';
+let pixelSub = 'endless';
+let solution = null;
+let pixelSolution = null;
+let guessCount = 0;
+let endlessScore = 0;
+let currentUser = null; // {username:..., remember:true/false}
+
+// Pixel settings
+const PIXEL_STEPS = [3,4,5,6,7,8,10,12,15,20,28,40,60,90,150];
+let pixelStepIndex = 0;
+let pixelImg = new Image();
+let pixelCanvas, pixelCtx;
+
+// DOM refs will be set on DOMContentLoaded
+let guessInput, suggestionsList, resultsEl, lbList, endlessScoreEl;
+let btnDaily, btnEndless, userInfo;
+let modeClassicBtn, modePixelBtn, pixelControls, pixelDailyBtn, pixelEndlessBtn, canvasWrap;
+let acctUser, acctPass, rememberMe, loginBtn, signupBtn, logoutBtn, acctMsg, exportBtn, importBtn, importFile;
+
+// ---------- Storage helpers ----------
+function loadUsers(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '{}'); }catch(e){ return {}; }
+}
+function saveUsers(users){ localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(users)); }
+function setCurrentUser(u){
+  currentUser = u;
+  if(!u) localStorage.removeItem(STORAGE_KEYS.CURRENT);
+  else if(u.remember) localStorage.setItem(STORAGE_KEYS.CURRENT, JSON.stringify(u));
+}
+function getRemembered(){
+  try{ return JSON.parse(localStorage.getItem(STORAGE_KEYS.CURRENT)); }catch(e){return null}
+}
+
+// ---------- Auth UI ----------
+function showAcct(msg, ok=false){ acctMsg.textContent = msg; acctMsg.style.color = ok ? '#9f9' : '#f88'; }
+
+function signup(){
+  const username = acctUser.value.trim();
+  const pass = acctPass.value;
+  if(!username || !pass){ showAcct('Enter username and password'); return; }
+  const users = loadUsers();
+  if(users[username]){ showAcct('User exists — choose another'); return; }
+  users[username] = { password: pass, totalWins:0, bestEndless:0, guessesMade:0, pixelWins:0, bestPixel:0, pixelGuesses:0 };
+  saveUsers(users);
+  showAcct('Account created — logged in', true);
+  const rem = rememberMe.checked;
+  setCurrentUser({username, remember: rem});
+  updateUserUI();
+}
+
+function login(){
+  const username = acctUser.value.trim();
+  const pass = acctPass.value;
+  if(!username || !pass){ showAcct('Enter username and password'); return; }
+  const users = loadUsers();
+  const u = users[username];
+  if(!u || u.password !== pass){ showAcct('Invalid credentials'); return; }
+  const rem = rememberMe.checked;
+  setCurrentUser({username, remember: rem});
+  showAcct('Logged in', true);
+  updateUserUI();
+}
+
+function logout(){
+  setCurrentUser(null);
+  acctUser.value = ''; acctPass.value = ''; rememberMe.checked = false;
+  showAcct('Logged out');
+  updateUserUI();
+}
+
+function updateUserUI(){
+  const cur = getRemembered();
+  if(cur){ setCurrentUser(cur); }
+  if(currentUser){
+    userInfo.innerText = currentUser.username;
+    logoutBtn.style.display = 'inline-block';
+  } else {
+    userInfo.innerText = 'Not signed in';
+    logoutBtn.style.display = 'none';
+  }
+  renderLeaderboard();
+}
+
+// ---------- Export / Import ----------
+function exportData(){
+  const users = loadUsers();
+  const payload = { exportedAt: new Date().toISOString(), users };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'clashguessr_leaderboard.json'; a.click(); URL.revokeObjectURL(url);
+}
+
+function importDataFile(file){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const obj = JSON.parse(reader.result);
+      if(obj && obj.users){
+        const users = loadUsers();
+        // merge users: overwrite only if imported totalWins greater
+        Object.keys(obj.users).forEach(u=>{
+          if(!users[u]) users[u] = obj.users[u];
+          else {
+            // choose higher stats per field
+            users[u].totalWins = Math.max(users[u].totalWins||0, obj.users[u].totalWins||0);
+            users[u].bestEndless = Math.max(users[u].bestEndless||0, obj.users[u].bestEndless||0);
+            users[u].guessesMade = Math.max(users[u].guessesMade||0, obj.users[u].guessesMade||0);
+            users[u].pixelWins = Math.max(users[u].pixelWins||0, obj.users[u].pixelWins||0);
+            users[u].bestPixel = Math.max(users[u].bestPixel||0, obj.users[u].bestPixel||0);
+            users[u].pixelGuesses = Math.max(users[u].pixelGuesses||0, obj.users[u].pixelGuesses||0);
+          }
+        });
+        saveUsers(users);
+        showAcct('Import successful', true);
+        renderLeaderboard();
+      } else showAcct('Invalid import file');
+    }catch(e){ showAcct('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+}
+
+// ---------- Gameplay helpers ----------
+function pickRandomCard(){ return CARDS[Math.floor(Math.random()*CARDS.length)]; }
+function startClassicEndless(){ activeMode='classic'; classicSub='endless'; setModeButtons(); resultsEl.innerHTML=''; endlessScore=0; endlessScoreEl.textContent='Score: 0'; solution = pickRandomCard(); guessCount=0; hideCanvas(); }
+function startClassicDaily(){ activeMode='classic'; classicSub='daily'; setModeButtons(); resultsEl.innerHTML=''; const today=new Date().toISOString().slice(0,10); const idx=Array.from(today).reduce((s,c)=>s+c.charCodeAt(0),0)%CARDS.length; solution=CARDS[idx]; guessCount=0; hideCanvas(); }
+function startPixelEndless(){ activeMode='pixel'; pixelSub='endless'; setModeButtons(); pixelControls.style.display='flex'; pixelResetForNewRound(); showCanvas(); }
+function startPixelDaily(){ activeMode='pixel'; pixelSub='daily'; setModeButtons(); pixelControls.style.display='flex'; const today=new Date().toISOString().slice(0,10); const idx=Array.from(today).reduce((s,c)=>s+c.charCodeAt(0),0)%CARDS.length; pixelSolution=CARDS[idx]; pixelResetForNewRound(true); showCanvas(); }
+function setModeButtons(){
+  if(activeMode === 'classic'){ modeClassicBtn.classList.add('active'); modePixelBtn.classList.remove('active'); pixelControls.style.display='none'; }
+  else { modePixelBtn.classList.add('active'); modeClassicBtn.classList.remove('active'); pixelControls.style.display='flex'; }
+  if(classicSub==='daily'){ btnDaily.classList.add('active'); btnEndless.classList.remove('active'); } else { btnEndless.classList.add('active'); btnDaily.classList.remove('active'); }
+  pixelDailyBtn.classList.toggle('active', pixelSub==='daily'); pixelEndlessBtn.classList.toggle('active', pixelSub==='endless');
+}
+
+// ---------- Autocomplete + submit ----------
+function setupAutocomplete(){
+  guessInput.addEventListener('input', ()=>{
+    const q = guessInput.value.trim().toLowerCase(); suggestionsList.innerHTML=''; if(!q){ suggestionsList.style.display='none'; return; }
+    const matches = CARDS.filter(c=>c.name.toLowerCase().startsWith(q)).slice(0,12);
+    matches.forEach(c=>{
+      const d = document.createElement('div'); d.className='suggest-item'; d.innerHTML = `<img src="${c.image}" class="suggest-thumb" onerror="this.src='https://via.placeholder.com/48x60?text=?'"/> <div><strong>${c.name}</strong><br><small style="opacity:.8">${c.rarity} · ${c.elixir}</small></div>`;
+      d.onclick = ()=>{ guessInput.value = c.name; suggestionsList.style.display='none'; onSubmit(); };
+      suggestionsList.appendChild(d);
+    });
+    suggestionsList.style.display = matches.length ? 'block' : 'none';
+  });
+  guessInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSubmit(); });
+}
+
+// ---------- Pixel mode drawing ----------
+function showCanvas(){ canvasWrap.style.display='flex'; }
+function hideCanvas(){ canvasWrap.style.display='none'; }
+function pixelResetForNewRound(keepSolution=false){ if(!keepSolution || !pixelSolution) pixelSolution = pickRandomCard(); pixelImg = new Image(); pixelImg.crossOrigin='anonymous'; pixelImg.src = pixelSolution.image; pixelStepIndex=0; pixelRevealed=false; pixelImg.onload = ()=> drawPixelated(); pixelImg.onerror = ()=> drawPixelated(); }
+function drawPixelated(){ if(!pixelCanvas||!pixelCtx||!pixelImg) return; const canvas=pixelCanvas, ctx=pixelCtx, W=canvas.width, H=canvas.height; const imgW=pixelImg.width||1, imgH=pixelImg.height||1; const cardRatio=imgW/imgH, canvasRatio=W/H; let drawW, drawH; if(cardRatio>canvasRatio){ drawW=W; drawH=W/cardRatio; } else { drawH=H; drawW=H*cardRatio; } const xOffset=Math.round((W-drawW)/2), yOffset=Math.round((H-drawH)/2);
+  if(pixelStepIndex>=PIXEL_STEPS.length){ ctx.clearRect(0,0,W,H); ctx.drawImage(pixelImg,xOffset,yOffset,drawW,drawH); pixelRevealed=true; return; }
+  const steps = PIXEL_STEPS[pixelStepIndex]; const off = document.createElement('canvas'); off.width=steps; off.height=Math.max(1, Math.round(steps*(drawH/drawW))); const offCtx = off.getContext('2d'); offCtx.drawImage(pixelImg,0,0,off.width,off.height); const imgData = offCtx.getImageData(0,0,off.width,off.height).data; ctx.clearRect(0,0,W,H); ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0,0,W,H); const pxW = drawW/off.width, pxH = drawH/off.height; for(let y=0;y<off.height;y++){ for(let x=0;x<off.width;x++){ const i=(y*off.width+x)*4; const r=imgData[i], g=imgData[i+1], b=imgData[i+2], a=imgData[i+3]/255; ctx.fillStyle=`rgba(${r},${g},${b},${a})`; ctx.fillRect(xOffset+Math.floor(x*pxW), yOffset+Math.floor(y*pxH), Math.ceil(pxW)+1, Math.ceil(pxH)+1); } } pixelRevealed=false; }
+function pixelHandleWrongGuess(){ if(pixelStepIndex<PIXEL_STEPS.length) pixelStepIndex++; drawPixelated(); }
+function pixelHandleCorrect(){ pixelStepIndex = PIXEL_STEPS.length; drawPixelated(); }
+
+// ---------- Submit handler ----------
+function renderGuessClassic(card){ const row = document.createElement('div'); row.className='guess-row'; const target = (activeMode==='classic'?solution:pixelSolution)||{}; row.innerHTML = `<div style="text-align:center"><img src="${card.image}" class="card-thumb" onerror="this.src='https://via.placeholder.com/80x80?text=?'"/><div style="margin-top:8px;font-weight:800">${card.name}</div></div>`; row.innerHTML += cmpTile(card.elixir, target.elixir); row.innerHTML += `<div class="tile ${card.rarity===target.rarity?'correct':'wrong'}">${card.rarity}</div>`; row.innerHTML += `<div class="tile ${card.type===target.type?'correct':'wrong'}">${card.type}</div>`; row.innerHTML += `<div class="tile ${card.targets===target.targets?'correct':'wrong'}">${card.targets}</div>`; row.innerHTML += cmpTile(card.year, target.year); resultsEl.appendChild(row); row.scrollIntoView({behavior:'smooth'}); }
+function cmpTile(a,b){ if(a===b) return `<div class="tile correct">${a}</div>`; if(typeof a==='number' && typeof b==='number') return `<div class="tile ${a<b?'up':'down'}">${a} ${a<b?'↑':'↓'}</div>`; return `<div class="tile wrong">${a}</div>`; }
+async function onSubmit(){ const text = guessInput.value.trim(); if(!text) return; const card = CARDS.find(c=>c.name.toLowerCase()===text.toLowerCase()); if(!card){ alert('Card not found — try the suggestions.'); return; } guessInput.value=''; suggestionsList.style.display='none'; guessCount++; if(activeMode==='classic'){ renderGuessClassic(card); if(card.name===solution.name){ const pts = (guessCount<=2)?10:(guessCount<=5?5:1); if(classicSub==='endless'){ endlessScore+=pts; endlessScoreEl.textContent='Score: '+endlessScore; if(currentUser) localUpdateUserStats(true, endlessScore, false); showBanner(`Correct — ${card.name}! +${pts} pts`); setTimeout(()=>{ resultsEl.innerHTML=''; solution=pickRandomCard(); guessCount=0; }, 1800); } else { if(currentUser) localUpdateUserStats(true, null, false); showBanner(`Correct — ${card.name}!`); } } else { if(currentUser) localUpdateUserStats(false, null, false); } } else { renderGuessClassic(card); if(card.name===pixelSolution.name){ pixelHandleCorrect(); const pts=(guessCount<=2)?10:(guessCount<=5?5:1); if(pixelSub==='endless'){ endlessScore+=pts; endlessScoreEl.textContent='Score: '+endlessScore; if(currentUser) localUpdateUserStats(true, endlessScore, true); showBanner(`Correct — ${card.name}! +${pts} pts`); setTimeout(()=>{ resultsEl.innerHTML=''; pixelSolution=pickRandomCard(); pixelResetForNewRound(); guessCount=0; }, 1800); } else { if(currentUser) localUpdateUserStats(true, null, true); showBanner(`Correct — ${card.name}!`); } } else { pixelHandleWrongGuess(); if(currentUser) localUpdateUserStats(false, null, true); } } }
+
+function showBanner(txt){ const b=document.createElement('div'); b.className='win-banner'; b.textContent=txt; document.body.appendChild(b); setTimeout(()=>b.remove(),2600); }
+
+// ---------- Local stat updates ----------
+function localUpdateUserStats(win=false, endless=null, pixel=false){ const cur = getRemembered(); if(!cur) return; const users = loadUsers(); const u = users[cur.username]; if(!u) return; if(pixel){ u.pixelGuesses = (u.pixelGuesses||0)+1; if(win) u.pixelWins=(u.pixelWins||0)+1; if(typeof endless==='number' && endless > (u.bestPixel||0)) u.bestPixel = endless; } else { u.guessesMade = (u.guessesMade||0)+1; if(win) u.totalWins=(u.totalWins||0)+1; if(typeof endless==='number' && endless > (u.bestEndless||0)) u.bestEndless = endless; } users[cur.username]=u; saveUsers(users); renderLeaderboard(); }
+
+// ---------- Leaderboard rendering ----------
+function renderLeaderboard(){ const users = loadUsers(); const arr = Object.keys(users).map(k=>({username:k,...users[k]})); arr.sort((a,b)=> (b.totalWins||0) - (a.totalWins||0) ); lbList.innerHTML=''; if(arr.length===0){ lbList.innerHTML='<div style="opacity:.8">No players yet</div>'; return; } arr.slice(0,50).forEach(u=>{ const div=document.createElement('div'); div.className='lb-row'; div.innerHTML=`<div>${u.username}</div><div>${u.totalWins||0} wins</div><div>Best: ${u.bestEndless||0}</div>`; lbList.appendChild(div); }); }
+
+// ---------- Export/Import bindings ----------
+function bindExportImport(){ exportBtn.addEventListener('click', exportData); importBtn.addEventListener('click', ()=>importFile.click()); importFile.addEventListener('change', (e)=>{ if(e.target.files && e.target.files[0]) importDataFile(e.target.files[0]); e.target.value=''; }); }
+
+// ---------- Init & DOM bindings ----------
+function bindDOM(){ guessInput = document.getElementById('guessInput'); suggestionsList = document.getElementById('suggestionsList'); resultsEl = document.getElementById('results'); lbList = document.getElementById('lbList'); endlessScoreEl = document.getElementById('endless-score'); btnDaily = document.getElementById('btnDaily'); btnEndless = document.getElementById('btnEndless'); userInfo = document.getElementById('user-info'); modeClassicBtn = document.getElementById('modeClassicBtn'); modePixelBtn = document.getElementById('modePixelBtn'); pixelControls = document.getElementById('pixelControls'); pixelDailyBtn = document.getElementById('pixelDailyBtn'); pixelEndlessBtn = document.getElementById('pixelEndlessBtn'); canvasWrap = document.getElementById('canvasWrap'); pixelCanvas = document.getElementById('pixelCanvas'); pixelCtx = pixelCanvas.getContext('2d'); acctUser = document.getElementById('acctUser'); acctPass = document.getElementById('acctPass'); rememberMe = document.getElementById('rememberMe'); loginBtn = document.getElementById('loginBtn'); signupBtn = document.getElementById('signupBtn'); logoutBtn = document.getElementById('logoutBtn'); acctMsg = document.getElementById('acctMsg'); exportBtn = document.getElementById('exportBtn'); importBtn = document.getElementById('importBtn'); importFile = document.getElementById('importFile');
+
+  setupAutocomplete();
+  modeClassicBtn.addEventListener('click', ()=>{ activeMode='classic'; setModeButtons(); startClassicEndless(); });
+  modePixelBtn.addEventListener('click', ()=>{ activeMode='pixel'; setModeButtons(); startPixelEndless(); });
+  btnDaily.addEventListener('click', ()=>{ startClassicDaily(); }); btnEndless.addEventListener('click', ()=>{ startClassicEndless(); });
+  pixelDailyBtn.addEventListener('click', ()=>{ startPixelDaily(); }); pixelEndlessBtn.addEventListener('click', ()=>{ startPixelEndless(); });
+  loginBtn.addEventListener('click', login); signupBtn.addEventListener('click', signup); logoutBtn.addEventListener('click', ()=>{ logout(); });
+  bindExportImport();
+
+  setModeButtons(); startClassicEndless();
+
+  // preload pixel solution
+  pixelSolution = pickRandomCard(); pixelImg.src = pixelSolution.image;
+
+  // handle canvas resizing
+  function resizeCanvas(){ const maxW = Math.min(480, window.innerWidth-120); const w = Math.max(240, Math.min(420, maxW)); const h = Math.round(w*0.7); pixelCanvas.width = w; pixelCanvas.height = h; if(activeMode==='pixel' && pixelImg && pixelImg.complete) drawPixelated(); }
+  window.addEventListener('resize', ()=>resizeCanvas()); resizeCanvas();
+
+  // remember me auto-login
+  const remembered = getRemembered(); if(remembered){ setCurrentUser(remembered); showAcct('Auto-logged in as '+remembered.username, true); }
+  updateUserUI(); renderLeaderboard();
+}
+
+window.addEventListener('DOMContentLoaded', bindDOM);
+</script>
+</body>
+</html>
+
+
 
